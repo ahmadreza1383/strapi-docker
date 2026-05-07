@@ -3,9 +3,7 @@
 # -------------------------------------------------------
 FROM node:22 AS build
 
-RUN rm /etc/apt/sources.list.d/debian.sources \
- && echo "deb [arch=amd64 trusted=yes] http://mirror.arvancloud.ir/debian bookworm main" > /etc/apt/sources.list.d/debian.list \
- && apt-get update \
+RUN apt-get update \
  && apt-get install -y \
       build-essential \
       gcc \
@@ -18,9 +16,6 @@ RUN rm /etc/apt/sources.list.d/debian.sources \
       libvips-dev \
       git \
       bash
-
-RUN npm config set registry https://mirror2.chabokan.net/npm/
-RUN yarn config set registry https://mirror2.chabokan.net/npm/
 
 ARG NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
@@ -48,14 +43,9 @@ RUN yarn build
 FROM node:22
 
 # Install runtime dependencies only
-RUN rm -f /etc/apt/sources.list.d/debian.sources \
- && echo "deb [arch=amd64 trusted=yes] http://mirror.arvancloud.ir/debian bookworm main" > /etc/apt/sources.list \
- && apt-get update \
+RUN apt-get update \
  && apt-get install -y libvips \
  && rm -rf /var/lib/apt/lists/*
-
-RUN npm config set registry https://mirror2.chabokan.net/npm/
-RUN yarn config set registry https://mirror2.chabokan.net/npm/
 
 ENV NODE_ENV=production
 ENV NODE_ENV=${NODE_ENV}
