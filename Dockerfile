@@ -23,13 +23,12 @@ ENV CI=true
 
 WORKDIR /opt
 
-RUN corepack enable
-
 # create strapi project non-interactive
-RUN yarn dlx create-strapi-app@latest app \
+RUN npx create-strapi-app@latest app \
     --quickstart \
     --no-run \
-    --skip-cloud
+    --skip-cloud \
+    --use-yarn
 
 WORKDIR /opt/app
 
