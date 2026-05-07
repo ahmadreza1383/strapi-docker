@@ -19,20 +19,20 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
+ENV CI=true
 
 WORKDIR /opt
 
-# install yarn
 RUN corepack enable
 
-# create strapi project
+# create strapi project non-interactive
 RUN yarn dlx create-strapi-app@latest app \
     --quickstart \
-    --no-run
+    --no-run \
+    --skip-cloud
 
 WORKDIR /opt/app
 
-# build admin panel
 RUN yarn build
 
 
