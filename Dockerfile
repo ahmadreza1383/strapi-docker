@@ -15,49 +15,44 @@ RUN apt-get update \
       libpng-dev \
       libvips-dev \
       git \
-      bash
+      bash \
+ && rm -rf /var/lib/apt/lists/*
 
-ARG NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV}
+ENV NODE_ENV=production
 
 WORKDIR /opt
 
-COPY package.json yarn.lock ./
+# install yarn
+RUN corepack enable
 
-# Ensure node-gyp works correctly
-RUN yarn global add node-gyp
-
-# Install dependencies
-RUN yarn config set network-timeout 600000 -g && yarn install --frozen-lockfile
-
-ENV PATH=/opt/node_modules/.bin:$PATH
+# create strapi project
+RUN yarn dlx create-strapi-app@latest app \
+    --quickstart \
+    --no-run
 
 WORKDIR /opt/app
-COPY . .
 
+# build admin panel
 RUN yarn build
+
 
 # -------------------------------------------------------
 # Production Stage
 # -------------------------------------------------------
 FROM node:22
 
-# Install runtime dependencies only
 RUN apt-get update \
  && apt-get install -y libvips \
  && rm -rf /var/lib/apt/lists/*
 
 ENV NODE_ENV=production
-ENV NODE_ENV=${NODE_ENV}
 
 WORKDIR /opt/app
 
-COPY --from=build /opt/node_modules ./node_modules
 COPY --from=build /opt/app ./
 
-ENV PATH=/opt/node_modules/.bin:$PATH
+ENV PATH=/opt/app/node_modules/.bin:$PATH
 
-# Set permissions
 RUN chown -R node:node /opt/app
 USER node
 
