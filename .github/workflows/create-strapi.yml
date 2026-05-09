@@ -1,0 +1,44 @@
+name: Create Strapi App
+
+on:
+  workflow_dispatch:
+
+jobs:
+  create-strapi:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Show versions
+        run: |
+          node -v
+          npm -v
+          npx -v
+
+      - name: Create Strapi app
+        run: |
+          npx create-strapi@latest app --quickstart --no-run --skip-cloud
+
+      - name: Generate manifest
+        run: |
+          cd app
+          find . -type f | sort > ../strapi-manifest.txt
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: strapi-app
+          path: app
+
+      - name: Upload manifest artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: strapi-manifest
+          path: strapi-manifest.txt
