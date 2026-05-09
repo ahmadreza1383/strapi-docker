@@ -1,60 +1,29 @@
-# -------------------------------------------------------
-# Build Stage
-# -------------------------------------------------------
-FROM node:22 AS build
+# Creating multi-stage build for production
+FROM node:22-alpine AS build
+RUN apk update && apk add --no-cache build-base gcc autoconf automake zlib-dev libpng-dev vips-dev git > /dev/null 2>&1
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
 
-RUN apt-get update \
- && apt-get install -y \
-      build-essential \
-      gcc \
-      g++ \
-      autoconf \
-      automake \
-      make \
-      libz-dev \
-      libpng-dev \
-      libvips-dev \
-      git \
-      bash \
- && rm -rf /var/lib/apt/lists/*
-
-ENV NODE_ENV=production
-ENV CI=true
-
-WORKDIR /opt
-
-# create strapi project non-interactive
-RUN npx create-strapi-app@latest app \
-    --quickstart \
-    --no-run \
-    --skip-cloud \
-    --use-yarn
-
+WORKDIR /opt/
+COPY package.json package-lock.json ./
+RUN npm install -g node-gyp
+RUN npm config set fetch-retry-maxtimeout 600000 -g && npm ci --only=production
+ENV PATH=/opt/node_modules/.bin:$PATH
 WORKDIR /opt/app
+COPY . .
+RUN npm run build
 
-RUN yarn build
-
-
-# -------------------------------------------------------
-# Production Stage
-# -------------------------------------------------------
-FROM node:22
-
-RUN apt-get update \
- && apt-get install -y libvips \
- && rm -rf /var/lib/apt/lists/*
-
-ENV NODE_ENV=production
-
+# Creating final production image
+FROM node:22-alpine
+RUN apk add --no-cache vips-dev
+ARG NODE_ENV=production
+ENV NODE_ENV=${NODE_ENV}
 WORKDIR /opt/app
-
+COPY --from=build /opt/node_modules ./node_modules
 COPY --from=build /opt/app ./
-
-ENV PATH=/opt/app/node_modules/.bin:$PATH
+ENV PATH=/opt/node_modules/.bin:$PATH
 
 RUN chown -R node:node /opt/app
 USER node
-
 EXPOSE 1337
-
-CMD ["yarn", "start"]
+CMD ["npm", "run", "start"]
