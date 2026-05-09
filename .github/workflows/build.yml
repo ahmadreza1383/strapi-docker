@@ -16,7 +16,7 @@ permissions:
 jobs:
 
   build-prod:
-    if: contains(github.event.head_commit.modified, 'Dockerfile')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.modified, 'Dockerfile')
     runs-on: ubuntu-latest
 
     steps:
@@ -50,7 +50,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
   build-dev:
-    if: contains(github.event.head_commit.modified, 'Dockerfile.dev')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.modified, 'Dockerfile.dev')
     runs-on: ubuntu-latest
 
     steps:
