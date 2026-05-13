@@ -1,0 +1,82 @@
+name: Create Strapi Skeleton and Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  create-strapi:
+    runs-on: ubuntu-latest
+
+    env:
+      CI: "true"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      NPM_CONFIG_LOGLEVEL: "error"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Clean previous files
+        run: |
+          rm -rf app strapi-skeleton.zip
+
+      - name: Create Strapi app
+        run: |
+          npx --yes create-strapi@latest app --quickstart --no-run --skip-cloud --use-npm
+
+      - name: Remove generated git directory
+        run: |
+          rm -rf app/.git
+
+      - name: Install dependencies
+        working-directory: app
+        run: |
+          npm install --no-audit --no-fund --loglevel=error
+
+      - name: Build Strapi app
+        working-directory: app
+        run: |
+          npm run build
+
+      - name: Remove node_modules after build
+        run: |
+          rm -rf app/node_modules
+
+      - name: Pack built Strapi skeleton
+        run: |
+          zip -r strapi-skeleton.zip app
+
+      - name: Generate release tag
+        id: release_tag
+        run: |
+          TAG="strapi-built-$(date +'%Y%m%d-%H%M%S')"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_tag.outputs.tag }}
+          name: Strapi Built App ${{ steps.release_tag.outputs.tag }}
+          body: |
+            Auto-generated built Strapi app.
+
+            Includes:
+            - project skeleton
+            - built admin output
+            - no node_modules
+
+            Command:
+            npx create-strapi@latest app --quickstart --no-run --skip-cloud --use-npm
+
+            Node.js:
+            22
+          files: strapi-skeleton.zip
