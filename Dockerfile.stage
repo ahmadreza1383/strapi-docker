@@ -12,7 +12,7 @@ RUN apk add --no-cache \
 
 WORKDIR /opt/app
 
-COPY package.json package-lock.json ./
+COPY package/package.json package/package-lock.json ./
 
 ENV NODE_ENV=production
 
