@@ -67,20 +67,28 @@ jobs:
           TAG="strapi-built-$(date +'%Y%m%d-%H%M%S')"
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
+      - name: Generate project structure list
+        id: structure
+        run: |
+          {
+            echo "structure<<EOF"
+            find app -maxdepth 1 -mindepth 1 | sed 's|app/|- |'
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.release_tag.outputs.tag }}
           name: Strapi Built App ${{ steps.release_tag.outputs.tag }}
           body: |
-            Auto-generated built Strapi app.
+            Automatically generated Strapi project skeleton without dependencies.
 
-            Includes:
-            - project skeleton
-            - built admin output
-            - no node_modules
+            Included top-level files and directories:
 
-            Command:
+            ${{ steps.structure.outputs.structure }}
+
+            Build command:
             npx create-strapi@latest app --quickstart --no-run --skip-cloud --use-npm
 
             Node.js:
