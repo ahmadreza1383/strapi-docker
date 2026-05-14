@@ -1,0 +1,54 @@
+version: '3.9'
+
+services:
+  backend:
+    image: ghcr.io/ahmadreza1383/strapi-base-dev
+    container_name: backend
+    environment:
+      DATABASE_CLIENT: ${DATABASE_CLIENT}
+      DATABASE_HOST: backend_db
+      DATABASE_PORT: ${DATABASE_PORT}
+      DATABASE_NAME: ${DATABASE_NAME}
+      DATABASE_USERNAME: ${DATABASE_USERNAME}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_JWT_SECRET: ${ADMIN_JWT_SECRET}
+      APP_KEYS: ${APP_KEYS}
+      NODE_ENV: ${NODE_ENV}
+    ports:
+      - "1337:1337"
+    volumes:
+      - ".:/opt/app"
+    depends_on:
+      backend_db:
+        condition: service_healthy
+    networks:
+      - backend
+  backend_db:
+    image: 'mysql/mysql-server:8.0'
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: '${DATABASE_PASSWORD}'
+      MYSQL_ROOT_HOST: '%'
+      MYSQL_DATABASE: '${DATABASE_NAME}'
+      MYSQL_USER: '${DATABASE_USERNAME}'
+      MYSQL_PASSWORD: '${DATABASE_PASSWORD}'
+      MYSQL_EXTRA_OPTIONS: '${MYSQL_EXTRA_OPTIONS:-}'
+    volumes:
+      - backend_db:/var/lib/mysql
+    networks:
+        - backend
+    healthcheck:
+      test:
+        - CMD
+        - mysqladmin
+        - ping
+        - '-p${DATABASE_PASSWORD}'
+      retries: 3
+      timeout: 5s
+networks:
+  backend:
+    driver: bridge
+volumes:
+  backend_db:
+    driver: local
