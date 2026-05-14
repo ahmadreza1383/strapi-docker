@@ -2,6 +2,9 @@ name: Create Strapi Skeleton and Release
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/release-stage-image.yml'
 
 permissions:
   contents: write
@@ -54,7 +57,9 @@ jobs:
       - name: Copy deploy directory into project
         run: |
           if [ -d "deploy" ]; then
-            cp -r deploy app/deploy
+            cp deploy/docker-compose.yml app/;
+            cp deploy/docker-compose.dev.yml app/;
+            cp deploy/Dockerfile app/;
           fi
 
       - name: Pack built Strapi skeleton
