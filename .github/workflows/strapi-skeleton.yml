@@ -51,6 +51,12 @@ jobs:
         run: |
           rm -rf app/node_modules
 
+      - name: Copy deploy directory into project
+        run: |
+          if [ -d "deploy" ]; then
+            cp -r deploy app/deploy
+          fi
+
       - name: Pack built Strapi skeleton
         run: |
           zip -r strapi-skeleton.zip app
