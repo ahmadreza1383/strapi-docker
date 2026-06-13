@@ -1,1 +1,2 @@
+@strapi/provider-upload-aws-s3
 mysql2@^3.22.3
