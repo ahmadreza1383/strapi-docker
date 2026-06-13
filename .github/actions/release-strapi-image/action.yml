@@ -1,0 +1,150 @@
+name: 'Release Strapi Docker Image'
+description: 'Build and push a Strapi Docker image (dev or stage)'
+
+inputs:
+  strapi_version:
+    description: 'Strapi version (e.g., latest, v5.45.0, v5.48.0)'
+    required: true
+  dockerfile:
+    description: 'Dockerfile path (e.g., ./Dockerfile.dev)'
+    required: true
+  image_name:
+    description: 'Image name suffix (e.g., strapi-base-dev)'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Read strapi config
+      id: config
+      shell: bash
+      run: |
+        source strapi.config
+        echo "NODE_VERSION=$NODE_VERSION" >> $GITHUB_OUTPUT
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ steps.config.outputs.NODE_VERSION }}
+
+    - name: Set version
+      id: version
+      shell: bash
+      run: |
+        echo "version=${{ inputs.strapi_version }}" >> $GITHUB_OUTPUT
+        echo "Selected Strapi version: ${{ inputs.strapi_version }}"
+
+    - name: List available cached versions
+      shell: bash
+      run: |
+        echo "Available cached versions in releases/:"
+        if ls -d releases/v*/ >/dev/null 2>&1; then
+          ls -d releases/v*/ | sed 's/releases\//- /; s/\///'
+        else
+          echo "- (none yet)"
+        fi
+
+    - name: Prepare strapi-cache context
+      id: prepare
+      shell: bash
+      run: |
+        VERSION="${{ steps.version.outputs.version }}"
+
+        if [ "$VERSION" = "latest" ]; then
+          echo "mode=fresh" >> $GITHUB_OUTPUT
+          echo "Fresh build mode - will create Strapi from scratch"
+          mkdir -p strapi-cache
+          echo '{}' > strapi-cache/package.json
+          touch strapi-cache/package-lock.json
+        else
+          if [ -d "releases/$VERSION" ]; then
+            echo "mode=cached" >> $GITHUB_OUTPUT
+            echo "Using cached version: $VERSION"
+            mkdir -p strapi-cache
+            cp releases/"$VERSION"/package.json strapi-cache/
+            cp releases/"$VERSION"/package-lock.json strapi-cache/
+          else
+            echo "❌ Error: Version '$VERSION' not found in releases/"
+            echo ""
+            echo "Available versions:"
+            ls -d releases/v*/ 2>/dev/null | sed 's/releases\//- /; s/\///' || echo "  (no cached versions)"
+            echo ""
+            echo "Use 'latest' for a fresh build, or one of the cached versions above."
+            exit 1
+          fi
+        fi
+
+    - name: (Fresh build) Create Strapi app
+      if: steps.prepare.outputs.mode == 'fresh'
+      shell: bash
+      run: |
+        source strapi.config
+        npx --yes create-strapi@latest "$PROJECT_NAME" \
+          --quickstart \
+          --no-run \
+          $([ "$SKIP_CLOUD" = "true" ] && echo "--skip-cloud") \
+          $([ "$USE_NPM" = "true" ] && echo "--use-npm")
+        cp "$PROJECT_NAME"/package.json strapi-cache/
+        cp "$PROJECT_NAME"/package-lock.json strapi-cache/
+        rm -rf "$PROJECT_NAME"
+
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract Docker metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository_owner }}/${{ inputs.image_name }}
+        tags: |
+          type=raw,value=latest
+          type=sha
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        build-contexts: |
+          strapi-cache=strapi-cache
+        file: ${{ inputs.dockerfile }}
+        push: true
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
+
+    - name: Extract Strapi version from package.json
+      id: strapi_ver
+      if: steps.prepare.outputs.mode == 'fresh'
+      shell: bash
+      run: |
+        STRAPI_VER=$(node -e "
+          const p = require('./strapi-cache/package.json');
+          const v = p.dependencies?.['@strapi/strapi'] || p.dependencies?.['strapi'] || p.version || 'unknown';
+          console.log('v' + v.replace(/^[\^~]/, ''));
+        ")
+        echo "version=$STRAPI_VER" >> $GITHUB_OUTPUT
+        echo "Detected Strapi version: $STRAPI_VER"
+
+    - name: Save release to cache
+      if: steps.prepare.outputs.mode == 'fresh'
+      shell: bash
+      run: |
+        VERSION="${{ steps.strapi_ver.outputs.version }}"
+        if [ "$VERSION" = "vunknown" ]; then
+          echo "Could not detect Strapi version, skipping cache save"
+          exit 0
+        fi
+
+        mkdir -p releases/"$VERSION"
+        cp strapi-cache/package.json releases/"$VERSION"/
+        cp strapi-cache/package-lock.json releases/"$VERSION"/
+        echo "✅ Saved Strapi version $VERSION to releases/$VERSION/"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add releases/"$VERSION"/
+        git commit -m "[skip ci] Add Strapi release $VERSION" || true
+        git push || true

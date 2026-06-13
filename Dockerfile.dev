@@ -17,11 +17,16 @@ ENV NODE_ENV=${NODE_ENV}
 
 WORKDIR /opt
 
-COPY package/package.json package/package-lock.json ./
+# Copy package files from build-context (strapi-cache)
+# For "latest": strapi-cache contains fresh Strapi package files
+# For cached versions: strapi-cache points directly to releases/<version>/
+COPY --from=strapi-cache package.json package-lock.json ./
+COPY requirements.txt ./
 
 RUN npm install -g node-gyp \
  && npm config set fetch-retry-maxtimeout 600000 -g \
- && npm ci
+ && npm ci \
+ && npm install $(cat requirements.txt)
 
 ENV PATH=/opt/node_modules/.bin:$PATH
 

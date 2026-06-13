@@ -23,48 +23,97 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 22
+      - name: Read strapi config
+        id: config
+        run: |
+          source strapi.config
+          echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_OUTPUT
+          echo "SKIP_CLOUD=$SKIP_CLOUD" >> $GITHUB_OUTPUT
+          echo "USE_NPM=$USE_NPM" >> $GITHUB_OUTPUT
+          echo "NODE_VERSION=$NODE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: ${{ steps.config.outputs.NODE_VERSION }}
 
       - name: Clean previous files
         run: |
-          rm -rf app strapi-skeleton.zip
+          rm -rf ${{ steps.config.outputs.PROJECT_NAME }} strapi-skeleton.zip
+
 
       - name: Create Strapi app
         run: |
-          npx --yes create-strapi@latest app --quickstart --no-run --skip-cloud --use-npm
+          source strapi.config
+          npx --yes create-strapi@latest $PROJECT_NAME \
+            --quickstart \
+            --no-run \
+            $([ "$SKIP_CLOUD" = "true" ] && echo "--skip-cloud") \
+            $([ "$USE_NPM" = "true" ] && echo "--use-npm")
 
       - name: Remove generated git directory
         run: |
-          rm -rf app/.git
+          rm -rf ${{ steps.config.outputs.PROJECT_NAME }}/.git
 
       - name: Install dependencies
-        working-directory: app
+        working-directory: ${{ steps.config.outputs.PROJECT_NAME }}
         run: |
           npm install --no-audit --no-fund --loglevel=error
+          npm install $(cat ../requirements.txt)
 
       - name: Build Strapi app
-        working-directory: app
+        working-directory: ${{ steps.config.outputs.PROJECT_NAME }}
         run: |
           npm run build
 
       - name: Remove node_modules after build
         run: |
-          rm -rf app/node_modules
+          rm -rf ${{ steps.config.outputs.PROJECT_NAME }}/node_modules
 
       - name: Copy deploy directory into project
         run: |
           if [ -d "deploy" ]; then
-            cp deploy/docker-compose.yml app/;
-            cp deploy/docker-compose.dev.yml app/;
-            cp deploy/Dockerfile app/;
+            cp deploy/docker-compose.yml ${{ steps.config.outputs.PROJECT_NAME }}/;
+            cp deploy/docker-compose.dev.yml ${{ steps.config.outputs.PROJECT_NAME }}/;
+            cp deploy/Dockerfile ${{ steps.config.outputs.PROJECT_NAME }}/;
+          fi
+
+      - name: Copy requirements.txt into project
+        run: |
+          cp requirements.txt ${{ steps.config.outputs.PROJECT_NAME }}/
+
+      - name: Detect Strapi version
+        id: strapi_ver
+        run: |
+          STRAPI_VER=$(node -e "
+            const p = require('./${{ steps.config.outputs.PROJECT_NAME }}/package.json');
+            const v = p.dependencies?.['@strapi/strapi'] || p.dependencies?.['strapi'] || p.version || 'unknown';
+            console.log('v' + v.replace(/^[\^~]/, ''));
+          ")
+          echo "version=$STRAPI_VER" >> $GITHUB_OUTPUT
+          echo "Detected Strapi version: $STRAPI_VER"
+
+      - name: Save release to cache
+        run: |
+          VERSION="${{ steps.strapi_ver.outputs.version }}"
+          if [ "$VERSION" = "vunknown" ]; then
+            echo "Could not detect Strapi version, skipping cache save"
+          else
+            mkdir -p releases/"$VERSION"
+            cp ${{ steps.config.outputs.PROJECT_NAME }}/package.json releases/"$VERSION"/
+            cp ${{ steps.config.outputs.PROJECT_NAME }}/package-lock.json releases/"$VERSION"/
+            echo "✅ Saved Strapi version $VERSION to releases/$VERSION/"
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add releases/"$VERSION"/
+            git commit -m "[skip ci] Add Strapi release $VERSION" || true
+            git push || true
           fi
 
       - name: Pack built Strapi skeleton
         run: |
-          zip -r strapi-skeleton.zip app
+          zip -r strapi-skeleton.zip ${{ steps.config.outputs.PROJECT_NAME }}
 
       - name: Generate release tag
         id: release_tag
@@ -77,7 +126,7 @@ jobs:
         run: |
           {
             echo "structure<<EOF"
-            find app -maxdepth 1 -mindepth 1 | sed 's|app/|- |'
+            find ${{ steps.config.outputs.PROJECT_NAME }} -maxdepth 1 -mindepth 1 | sed 's|${{ steps.config.outputs.PROJECT_NAME }}/|- |'
             echo "EOF"
           } >> $GITHUB_OUTPUT
 
@@ -94,8 +143,14 @@ jobs:
             ${{ steps.structure.outputs.structure }}
 
             Build command:
-            npx create-strapi@latest app --quickstart --no-run --skip-cloud --use-npm
+            npx create-strapi@latest ${{ steps.config.outputs.PROJECT_NAME }} --quickstart --no-run --skip-cloud --use-npm
 
             Node.js:
-            22
+            ${{ steps.config.outputs.NODE_VERSION }}
+
+            > After extracting, run:
+            > cd ${{ steps.config.outputs.PROJECT_NAME }}
+            > npm install
+            > npm install \$(cat requirements.txt)
+            > npm run build
           files: strapi-skeleton.zip

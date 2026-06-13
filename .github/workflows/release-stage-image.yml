@@ -2,6 +2,11 @@ name: Release Stage Docker Image
 
 on:
   workflow_dispatch:
+    inputs:
+      strapi_version:
+        description: 'Strapi version (e.g., latest, v5.45.0, v5.48.0)'
+        required: true
+        default: 'latest'
   push:
     branches:
       - main
@@ -9,42 +14,20 @@ on:
       - 'Dockerfile.stage'
       - '.github/workflows/release-stage-image.yml'
 
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository_owner }}/strapi-base-stage
-
 jobs:
-  docker:
+  release:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - name: Release Strapi Docker Image
+        uses: ./.github/actions/release-strapi-image
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract Docker metadata
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ env.IMAGE_NAME }}
-          tags: |
-            type=raw,value=latest
-            type=sha
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: ./Dockerfile.stage
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          strapi_version: ${{ github.event.inputs.strapi_version || 'latest' }}
+          dockerfile: ./Dockerfile.stage
+          image_name: strapi-base-stage

@@ -12,11 +12,16 @@ RUN apk add --no-cache \
 
 WORKDIR /opt/app
 
-COPY package/package.json package/package-lock.json ./
+# Copy package files from build-context (strapi-cache)
+# For "latest": strapi-cache contains fresh Strapi package files
+# For cached versions: strapi-cache points directly to releases/<version>/
+COPY --from=strapi-cache package.json package-lock.json ./
+COPY requirements.txt ./
 
 ENV NODE_ENV=production
 
 RUN npm config set fetch-retry-maxtimeout 600000 -g \
- && npm ci --omit=dev
+ && npm ci --omit=dev \
+ && npm install $(cat requirements.txt)
 
 ENV PATH=/opt/app/node_modules/.bin:$PATH
