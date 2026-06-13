@@ -31,3 +31,4 @@ jobs:
           strapi_version: ${{ github.event.inputs.strapi_version || 'latest' }}
           dockerfile: ./Dockerfile.dev
           image_name: strapi-base-dev
+          github_token: ${{ secrets.GITHUB_TOKEN }}

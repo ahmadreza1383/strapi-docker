@@ -11,6 +11,10 @@ inputs:
   image_name:
     description: 'Image name suffix (e.g., strapi-base-dev)'
     required: true
+  github_token:
+    description: 'GitHub token (secrets.GITHUB_TOKEN)'
+    required: true
+    default: ${{ github.token }}
 
 runs:
   using: 'composite'
@@ -93,7 +97,7 @@ runs:
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ inputs.github_token }}
 
     - name: Extract Docker metadata
       id: meta
